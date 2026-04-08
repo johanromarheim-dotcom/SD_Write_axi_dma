@@ -1,0 +1,30 @@
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity channel_pack is
+    port (
+        clk      : in  std_logic;
+        resetn   : in  std_logic;
+        chan0    : in  std_logic_vector(15 downto 0);
+        chan1    : in  std_logic_vector(15 downto 0);
+        chan2    : in  std_logic_vector(15 downto 0);
+        chan3    : in  std_logic_vector(15 downto 0);
+        cpacked   : out std_logic_vector(63 downto 0)-- named cpacked and not packed becuse this is a reserved word in verilog
+    );
+end entity;
+
+architecture rtl of channel_pack is
+begin
+    -- Pack channels into one 64-bit word each clock cycle
+    -- Chan3 in MSB, Chan0 in LSB 
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if resetn='0' then
+                cpacked  <= (others => '0');
+            else
+                cpacked <= chan3 & chan2 & chan1 & chan0;
+            end if;        
+        end if;
+    end process;
+end architecture;
