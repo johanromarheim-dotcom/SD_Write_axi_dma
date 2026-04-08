@@ -1,0 +1,66 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity Axi_Master is
+  generic (
+    DATA_WIDTH  : integer := 64;   -- match DMA config
+    BURST_WORDS : integer := 5500  -- words per DMA transfer
+  );
+  port (
+    -- System
+    clk         : in  std_logic;
+    rst_n       : in  std_logic;
+    enable      : in  std_logic;
+
+    -- ---- YOUR DATA INPUT ----
+    -- Replace these with whatever your logic produces
+    user_data   : in  std_logic_vector(DATA_WIDTH-1 downto 0);
+    user_valid  : in  std_logic;
+    user_ready  : out std_logic;  -- backpressure to your logic
+
+    -- AXI4-Stream Master (to DMA S2MM)
+    m_axis_tdata  : out std_logic_vector(DATA_WIDTH-1 downto 0);
+    m_axis_tvalid : out std_logic;
+    m_axis_tready : in  std_logic;
+    m_axis_tkeep  : out std_logic_vector(DATA_WIDTH/8-1 downto 0);
+    m_axis_tlast  : out std_logic   -- asserted on last word of burst
+  );
+end entity;
+
+architecture rtl of Axi_Master is
+    signal s_m_axis_tvalid : std_logic;    
+  signal word_cnt : integer range 0 to BURST_WORDS;
+begin
+
+  -- TKEEP: all bytes valid (change if partial writes needed)
+  m_axis_tkeep <= (others => '1');
+
+  -- Pass through data when enabled and DMA ready
+  m_axis_tdata  <= user_data;
+  m_axis_tvalid <= s_m_axis_tvalid;
+  s_m_axis_tvalid <= user_valid and enable;
+  user_ready    <= m_axis_tready;
+
+  -- TLAST: assert on the last word of each DMA burst
+  -- The DMA S2MM needs TLAST to know when a packet ends
+  p_burst : process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst_n = '0' then
+        word_cnt <= 0;
+      elsif s_m_axis_tvalid = '1' and m_axis_tready = '1' then
+        if word_cnt = BURST_WORDS - 1 then
+          word_cnt <= 0;
+        else
+          word_cnt <= word_cnt + 1;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  m_axis_tlast <= '1' when (word_cnt = BURST_WORDS - 1)
+                         and (s_m_axis_tvalid = '1')
+                else '0';
+
+end architecture;
